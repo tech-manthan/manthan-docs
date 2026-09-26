@@ -85,7 +85,7 @@ function cleanTypeText(type: Type, contextNode: Node, isOptional: boolean): stri
   return text.replace(/"([^"]*)"/g, "'$1'");
 }
 
-function walkType(type: Type, contextNode: Node): PropDoc[] {
+export function walkType(type: Type, contextNode: Node): PropDoc[] {
   return type.getProperties().map((symbol) => {
     const decl = symbol.getDeclarations().find((d): d is PropertySignature => Node.isPropertySignature(d));
     const doc = decl?.getJsDocs()[0];
@@ -100,6 +100,82 @@ function walkType(type: Type, contextNode: Node): PropDoc[] {
       ...(description ? { description } : {}),
     };
   });
+}
+
+// Walks a type NODE (AST), not a resolved Type — needed for a type alias
+// like `ToggleGroupProps = ToggleGroupBase & (UnionBranchA | UnionBranchB)`
+// where `ToggleGroupBase = Omit<ComponentProps<'div'>, 'defaultValue' |
+// 'onChange'> & {...}`. Calling walkType on the whole alias's *resolved*
+// Type (as this file used to) leaks every native <div> attribute TypeScript's
+// built-in `Omit<T, K>` didn't happen to name in K — Omit only removes the
+// named keys, it doesn't mark "the rest of T" as external the way this
+// pipeline's own internal/external rule does for a heritage clause. Walking
+// the AST node-by-node lets the SAME internal/external rule apply inside an
+// intersection, not just at a top-level `extends`.
+export function walkTypeNode(node: Node): PropDoc[] {
+  if (Node.isParenthesizedTypeNode(node)) return walkTypeNode(node.getTypeNode());
+  if (Node.isIntersectionTypeNode(node)) return node.getTypeNodes().flatMap((n) => walkTypeNode(n));
+  if (Node.isTypeLiteral(node)) {
+    return node.getMembers().flatMap((m) => {
+      if (!Node.isPropertySignature(m)) return [];
+      const { description, default: def } = jsDocOf(m);
+      return [
+        {
+          name: m.getName(),
+          type: (m.getTypeNode() ?? m.getType()).getText(),
+          required: !m.hasQuestionToken(),
+          ...(def ? { default: def } : {}),
+          ...(description ? { description } : {}),
+        },
+      ];
+    });
+  }
+  if (isTypeReference(node)) {
+    const name = node.getTypeName().getText();
+    if (name === 'Omit') {
+      const [innerNode, keysNode] = node.getTypeArguments();
+      const omitted = keysNode
+        .getText()
+        .split('|')
+        .map((s: string) => s.trim().replace(/^['"]|['"]$/g, ''));
+      if (isInternalTypeNode(innerNode)) return walkTypeNode(innerNode).filter((p) => !omitted.includes(p.name));
+      return []; // external (e.g. ComponentProps<'div'>) — skip, matching the note-not-enumerate rule
+    }
+    // A generic reference (e.g. `VariantProps<typeof button>`, a CVA-style
+    // computed/mapped type) needs the type CHECKER's substitution, which AST
+    // recursion into the alias's own (still-generic) definition can't
+    // reproduce — fall back to the proven Type-API resolution for those.
+    // A plain, non-generic reference (e.g. `ToggleGroupBase`, no `<...>`)
+    // has nothing to substitute, so recursing into its own definition is
+    // both safe and necessary — it's exactly how an Omit<Native,...> buried
+    // two names deep still gets the internal/external rule applied to it.
+    if (node.getTypeArguments().length > 0) return walkType(node.getType(), node);
+    if (!isInternalTypeNode(node)) return [];
+    const decl = declarationOf(node);
+    if (decl && Node.isInterfaceDeclaration(decl)) {
+      const own = walkInterfaceMembers(decl);
+      const inherited = decl.getExtends().flatMap((h) => resolveHeritage(h).members);
+      return [...inherited, ...own];
+    }
+    if (decl && Node.isTypeAliasDeclaration(decl)) return walkTypeNode(decl.getTypeNodeOrThrow());
+    return [];
+  }
+  // A union (e.g. the parenthesized discriminated union above) or anything
+  // else — the resolved Type API already handles a union of plain object
+  // types correctly (TypeScript flattens `B | C`'s apparent members), which
+  // is exactly the shape left once Omit/named-reference cases are handled above.
+  return walkType(node.getType(), node);
+}
+
+function declarationOf(node: Node): Node | undefined {
+  const type = node.getType();
+  const symbol = type.getSymbol() ?? type.getAliasSymbol();
+  return symbol?.getDeclarations()?.[0];
+}
+
+function isInternalTypeNode(node: Node): boolean {
+  const decl = declarationOf(node);
+  return !!decl && isInternalDeclaration(decl.getSourceFile().getFilePath());
 }
 
 export function resolveHeritage(heritage: ExpressionWithTypeArguments): { members: PropDoc[]; note?: string } {

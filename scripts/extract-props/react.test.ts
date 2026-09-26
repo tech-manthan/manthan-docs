@@ -38,6 +38,19 @@ describe('extractReactPropsFromProject', () => {
     ]);
   });
 
+  it('resolves a type alias (not just an interface), including an intersection-of-union shape (regression: real ToggleGroupProps)', () => {
+    const project = new Project({ tsConfigFilePath: `${process.cwd()}/../manthan-react/tsconfig.json` });
+    const result = extractReactPropsFromProject(project, `${process.cwd()}/../manthan-react/src/components/advanced.tsx`, 'ToggleGroupProps');
+    const byName = new Map(result.members.map((m) => [m.name, m]));
+    expect(byName.get('variant')).toEqual({ name: 'variant', type: "'segmented' | 'outline' | 'ghost'", required: false });
+    expect(byName.get('orientation')).toEqual({ name: 'orientation', type: "'horizontal' | 'vertical'", required: false });
+    expect(byName.get('type')).toBeDefined();
+    expect(byName.get('type')!.type).toContain('single');
+    expect(byName.get('type')!.type).toContain('multiple');
+    expect(byName.get('value')).toBeDefined();
+    expect(byName.has('onClick')).toBe(false);
+  });
+
   it('throws when the named interface is missing', () => {
     const project = new Project({ useInMemoryFileSystem: true });
     project.createSourceFile('/repo/a.tsx', `export interface Other {}`);

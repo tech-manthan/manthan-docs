@@ -1,5 +1,5 @@
 import { Node, Project, SourceFile, SyntaxKind } from 'ts-morph';
-import { resolveHeritage, walkInterfaceMembers } from './shared';
+import { resolveHeritage, walkInterfaceMembers, walkTypeNode } from './shared';
 import type { PropDoc } from './types';
 
 // Finds the component function's `{ x = default, ... }: <typeName>` parameter
@@ -29,18 +29,33 @@ export function extractReactPropsFromProject(
 ): { members: PropDoc[]; note?: string } {
   const source = project.getSourceFileOrThrow(file);
   const iface = source.getInterface(typeName);
-  if (!iface) throw new Error(`React adapter: interface "${typeName}" not found in ${file}`);
-  const own = walkInterfaceMembers(iface);
-  const notes: string[] = [];
-  const inherited: PropDoc[] = [];
-  for (const heritage of iface.getExtends()) {
-    const { members, note } = resolveHeritage(heritage);
-    inherited.push(...members);
-    if (note) notes.push(note);
+  if (iface) {
+    const own = walkInterfaceMembers(iface);
+    const notes: string[] = [];
+    const inherited: PropDoc[] = [];
+    for (const heritage of iface.getExtends()) {
+      const { members, note } = resolveHeritage(heritage);
+      inherited.push(...members);
+      if (note) notes.push(note);
+    }
+    const defaults = destructuringDefaults(source, typeName);
+    const members = [...inherited, ...own].map((m) => (m.default === undefined && defaults.has(m.name) ? { ...m, default: defaults.get(m.name)! } : m));
+    return { members, note: notes[0] };
   }
-  const defaults = destructuringDefaults(source, typeName);
-  const members = [...inherited, ...own].map((m) => (m.default === undefined && defaults.has(m.name) ? { ...m, default: defaults.get(m.name)! } : m));
-  return { members, note: notes[0] };
+
+  // Not an interface — try a type alias next (e.g. `export type ToggleGroupProps
+  // = ToggleGroupBase & (...)`, where ToggleGroupBase itself embeds
+  // `Omit<ComponentProps<'div'>, ...>`). walkTypeNode walks the alias's own
+  // AST rather than its resolved Type, so the internal/external rule applies
+  // inside the intersection too, not just at a top-level `extends` — walking
+  // the resolved Type directly (the first version of this fix) leaked every
+  // native <div> attribute TypeScript's Omit<T,K> didn't happen to name.
+  const alias = source.getTypeAlias(typeName);
+  if (alias) {
+    return { members: walkTypeNode(alias.getTypeNodeOrThrow()) };
+  }
+
+  throw new Error(`React adapter: interface "${typeName}" not found in ${file}`);
 }
 
 // Cached across calls within one orchestrator run: a tsConfigFilePath-backed
