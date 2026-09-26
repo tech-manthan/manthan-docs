@@ -43,13 +43,13 @@ jobs:
         run: npm ci && npm run build
       - name: Build manthan-react (lib + demos)
         working-directory: manthan-react
-        run: npm ci && npm run build && npx vite build demos --outDir demos/dist
+        run: npm ci && npm run build && npx vite build demos --outDir dist
       - name: Build manthan-vue (lib + demos)
         working-directory: manthan-vue
-        run: npm ci && npm run build && npx vite build demos --outDir demos/dist
+        run: npm ci && npm run build && npx vite build demos --outDir dist
       - name: Build manthan-svelte (lib + demos)
         working-directory: manthan-svelte
-        run: npm ci && npm run build && npx vite build demos --outDir demos/dist
+        run: npm ci && npm run build && npx vite build demos --outDir dist
       - name: Build manthan-angular (lib + playground)
         working-directory: manthan-angular
         run: npm ci && npm run build && npm run build:playground
