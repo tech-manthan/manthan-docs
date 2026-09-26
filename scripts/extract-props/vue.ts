@@ -9,14 +9,20 @@ export function extractScriptSetup(sfc: string): string {
   return match[1];
 }
 
-function findDefinePropsCall(script: string): { file: SourceFile; call: CallExpression } {
-  const project = new Project({ useInMemoryFileSystem: true });
-  const file = project.createSourceFile('inline.ts', script);
+// `Node.isTypeReferenceNode` doesn't exist as a generated guard in this
+// ts-morph version (found via a real-repo regression test — it threw
+// `TypeError: Node.isTypeReferenceNode is not a function` the first time
+// this branch actually ran, meaning the whole named-interface defineProps
+// path had never been exercised). `Node.is(SyntaxKind.TypeReference)`
+// is the equivalent guard.
+const isTypeReference = Node.is(SyntaxKind.TypeReference);
+
+function findDefinePropsCall(file: SourceFile): CallExpression {
   const call = file
     .getDescendantsOfKind(SyntaxKind.CallExpression)
     .find((c) => c.getExpression().getText() === 'defineProps');
   if (!call) throw new Error('Vue adapter: no defineProps<...>() call found');
-  return { file, call };
+  return call;
 }
 
 function definePropsMembers(file: SourceFile, call: CallExpression): PropDoc[] {
@@ -31,7 +37,7 @@ function definePropsMembers(file: SourceFile, call: CallExpression): PropDoc[] {
       };
     });
   }
-  if (Node.isTypeReferenceNode(typeArg)) {
+  if (isTypeReference(typeArg)) {
     const iface = file.getInterfaceOrThrow(typeArg.getTypeName().getText());
     const own = walkInterfaceMembers(iface);
     const inherited = iface.getExtends().flatMap((h) => resolveHeritage(h).members);
@@ -61,9 +67,8 @@ function applyWithDefaults(file: SourceFile, definePropsCall: CallExpression, me
   return members.map((m) => (defaults.has(m.name) ? { ...m, default: defaults.get(m.name) } : m));
 }
 
-function defineModelMembers(script: string): PropDoc[] {
-  const project = new Project({ useInMemoryFileSystem: true });
-  const file = project.createSourceFile('models.ts', script);
+function defineModelMembers(script: string, project: Project, virtualPath: string): PropDoc[] {
+  const file = project.createSourceFile(`${virtualPath}.models.ts`, script, { overwrite: true });
   return file
     .getDescendantsOfKind(SyntaxKind.CallExpression)
     .filter((c) => c.getExpression().getText() === 'defineModel')
@@ -87,18 +92,32 @@ function defineModelMembers(script: string): PropDoc[] {
     });
 }
 
-export function propsFromScript(script: string): { members: PropDoc[]; note?: string } {
+// Real extraction uses a tsConfigFilePath-backed project (not a bare
+// useInMemoryFileSystem one) so an internal `extends` reference resolves
+// against real node_modules, matching the Svelte adapter's fix (needed
+// there for Chart's `extends Omit<ChartControllerOptions<T>, 'hidden'>`;
+// no current Vue component triggers this, but the next one that extends an
+// internal type will, and an in-memory project would silently drop its
+// inherited props instead of erroring).
+export function propsFromScript(
+  script: string,
+  project: Project = new Project({ useInMemoryFileSystem: true }),
+  virtualPath = 'inline',
+): { members: PropDoc[]; note?: string } {
   let members: PropDoc[] = [];
   let note: string | undefined;
   if (script.includes('defineProps')) {
-    const { file, call } = findDefinePropsCall(script);
+    const file = project.createSourceFile(`${virtualPath}.ts`, script, { overwrite: true });
+    const call = findDefinePropsCall(file);
     members = applyWithDefaults(file, call, definePropsMembers(file, call));
   }
-  members = [...members, ...defineModelMembers(script)];
+  members = [...members, ...defineModelMembers(script, project, virtualPath)];
   return { members, note };
 }
 
 export function extractVueProps(file: string): { members: PropDoc[]; note?: string } {
   const sfc = readFileSync(file, 'utf-8');
-  return propsFromScript(extractScriptSetup(sfc));
+  const repoRoot = `${process.cwd()}/../manthan-vue`;
+  const project = new Project({ tsConfigFilePath: `${repoRoot}/tsconfig.json` });
+  return propsFromScript(extractScriptSetup(sfc), project, `${repoRoot}/src/components/__extracted__`);
 }

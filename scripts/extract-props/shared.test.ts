@@ -84,6 +84,18 @@ describe('resolveHeritage', () => {
     ]);
   });
 
+  it('resolves a heritage member type to its readable alias name, not a bundled-dts import path (regression: real Chart extraction)', () => {
+    const repoRoot = `${process.cwd()}/../manthan-react`;
+    const project = new Project({ tsConfigFilePath: `${repoRoot}/tsconfig.json` });
+    const file = project.addSourceFileAtPath(`${repoRoot}/src/components/chart.tsx`);
+    const [heritage] = file.getInterfaceOrThrow('ChartProps').getExtends();
+    const { members } = resolveHeritage(heritage);
+    const byName = new Map(members.map((m) => [m.name, m.type]));
+    expect(byName.get('type')).toBe('ChartType');
+    expect(byName.get('series')).toBe('ChartSeries[]');
+    expect(byName.get('curve')).toBe('ChartCurve');
+  });
+
   it('unwraps Omit<Internal, "k"> and drops the omitted key', () => {
     const p = project();
     p.createSourceFile(

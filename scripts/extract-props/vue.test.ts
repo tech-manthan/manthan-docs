@@ -1,3 +1,4 @@
+import { Project } from 'ts-morph';
 import { describe, expect, it } from 'vitest';
 import { extractScriptSetup, propsFromScript } from './vue';
 
@@ -43,6 +44,20 @@ describe('propsFromScript', () => {
       { name: 'columns', type: 'ColumnDef<T>[]', required: true },
       { name: 'rows', type: 'T[]', required: true },
     ]);
+  });
+
+  it('resolves an internal extends reference against real node_modules when given a real, tsConfigFilePath-backed project (regression: Svelte needed this for Chart, Vue should match for consistency)', () => {
+    const repoRoot = `${process.cwd()}/../manthan-vue`;
+    const project = new Project({ tsConfigFilePath: `${repoRoot}/tsconfig.json` });
+    const virtualPath = `${repoRoot}/src/components/__extracted_test__.ts`;
+    const script = `
+      import type { ChartControllerOptions } from '@manthan/base/dom';
+      interface Props extends Omit<ChartControllerOptions, 'hidden'> { class?: string; }
+      defineProps<Props>();
+    `;
+    const { members } = propsFromScript(script, project, virtualPath);
+    expect(members.find((m) => m.name === 'type')).toEqual({ name: 'type', type: 'ChartType', required: true });
+    expect(members.find((m) => m.name === 'class')).toEqual({ name: 'class', type: 'string', required: false });
   });
 
   it('reads a withDefaults default whose expression itself contains braces, without truncating it (DataTable\'s real getRowId default)', () => {

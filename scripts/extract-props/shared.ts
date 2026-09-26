@@ -1,4 +1,4 @@
-import { InterfaceDeclaration, Node, PropertySignature, ExpressionWithTypeArguments, Type } from 'ts-morph';
+import { InterfaceDeclaration, Node, PropertySignature, ExpressionWithTypeArguments, Type, TypeFormatFlags } from 'ts-morph';
 import type { PropDoc } from './types';
 
 // "Internal" means resolvable to our own source (any Manthan repo, including a
@@ -59,8 +59,18 @@ function unwrapOmit(node: Node): { target: Node; omitted: string[] } {
 // `| undefined` (redundant — `required` already conveys that) and normalizes
 // string literals to double quotes (inconsistent with the single-quoted style
 // every framework's own source uses).
-function cleanTypeText(type: Type, isOptional: boolean): string {
-  let text = type.getText();
+// UseAliasDefinedOutsideCurrentScope makes the printer prefer a visible type
+// alias's own name (e.g. `ChartType`) over expanding or dynamically
+// import()-referencing it. Without it, a named export whose declaration site
+// isn't imported into contextNode's file — true of every heritage member,
+// since the target interface only imports the *options* type, not each of
+// its property types individually — prints via its resolved declaration
+// file instead. For a library built with dts-bundling (tsup/rollup-plugin-dts),
+// that file is a rolled-up internal chunk with mangled, non-public names
+// (`import('.../chart-CsGmkoee').k` instead of `ChartType`), found via real
+// extraction against manthan-react's built Chart component.
+function cleanTypeText(type: Type, contextNode: Node, isOptional: boolean): string {
+  let text = type.getText(contextNode, TypeFormatFlags.UseAliasDefinedOutsideCurrentScope);
   if (isOptional && text.endsWith(' | undefined')) text = text.slice(0, -' | undefined'.length);
   return text.replace(/"([^"]*)"/g, "'$1'");
 }
@@ -74,7 +84,7 @@ function walkType(type: Type, contextNode: Node): PropDoc[] {
     const required = !symbol.isOptional();
     return {
       name: symbol.getName(),
-      type: cleanTypeText(symbol.getTypeAtLocation(contextNode), !required),
+      type: cleanTypeText(symbol.getTypeAtLocation(contextNode), contextNode, !required),
       required,
       ...(defaultTag ? { default: defaultTag.getCommentText()?.trim() } : {}),
       ...(description ? { description } : {}),
