@@ -9,11 +9,17 @@ export async function getStaticPaths() {
 const { entry } = Astro.props;
 const { Content } = await entry.render();
 
+// One demo file per component per framework (registry.tsx/.ts and demo.ts
+// are just the runtime `?c=<slug>` dispatchers, wiring these same files in)
+// — each framework's own naming convention: kebab-case for React/Angular
+// (matching their file-per-nothing style elsewhere), PascalCase for
+// Vue/Svelte SFCs (matching every real component file, e.g. Button.vue).
+const pascal = entry.slug.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join('');
 const demoSourcePaths: Record<'react' | 'vue' | 'svelte' | 'angular', string> = {
-  react: new URL('../../../../manthan-react/demos/registry.tsx', import.meta.url).pathname,
-  vue: new URL('../../../../manthan-vue/demos/registry.ts', import.meta.url).pathname,
-  svelte: new URL('../../../../manthan-svelte/demos/registry.ts', import.meta.url).pathname,
-  angular: new URL('../../../../manthan-angular/projects/playground/src/demo.ts', import.meta.url).pathname,
+  react: new URL(`../../../../manthan-react/demos/${entry.slug}.demo.tsx`, import.meta.url).pathname,
+  vue: new URL(`../../../../manthan-vue/demos/${pascal}Demo.vue`, import.meta.url).pathname,
+  svelte: new URL(`../../../../manthan-svelte/demos/${pascal}Demo.svelte`, import.meta.url).pathname,
+  angular: new URL(`../../../../manthan-angular/projects/playground/src/demos/${entry.slug}-demo.ts`, import.meta.url).pathname,
 };
 ---
 <ComponentPage slug={entry.slug} title={entry.data.title} description={entry.data.description} demoSourcePaths={demoSourcePaths}>

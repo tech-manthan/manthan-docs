@@ -22,6 +22,16 @@ const propsModules = import.meta.glob<ComponentPropsDoc>('../data/props/*.json',
 const propsDoc = propsModules[`../data/props/${slug}.json`];
 const frameworks: Framework[] = ['react', 'vue', 'svelte', 'angular'];
 const noteKeys = { react: 'reactNote', vue: 'vueNote', svelte: 'svelteNote', angular: 'angularNote' } as const;
+
+// Demo source files import from their own repo's real relative paths
+// (`../src/components/button`) so the demo app actually builds and runs —
+// but that's not what a reader should copy-paste, since `@manthan/*` isn't
+// published under those paths (or at all, yet). Rewritten for DISPLAY only;
+// the file on disk (and the running demo) is untouched. Angular's demos
+// already import `@manthan/angular` directly, so this is a no-op there.
+function forDisplay(code: string, fw: Framework): string {
+  return code.replace(/from '\.\.\/src\/[^']*'/g, `from '@manthan/${fw}'`);
+}
 ---
 <html lang="en">
   <head>
@@ -36,7 +46,7 @@ const noteKeys = { react: 'reactNote', vue: 'vueNote', svelte: 'svelteNote', ang
       <section>
         <h2>{fw}</h2>
         <iframe src={demoUrl(fw, slug)} title={`${title} — ${fw} demo`} style="width:100%;height:200px;border:1px solid #ccc;" />
-        <Code code={readFileSync(demoSourcePaths[fw], 'utf-8')} lang={fw === 'vue' ? 'vue' : fw === 'svelte' ? 'svelte' : 'tsx'} />
+        <Code code={forDisplay(readFileSync(demoSourcePaths[fw], 'utf-8'), fw)} lang={fw === 'vue' ? 'vue' : fw === 'svelte' ? 'svelte' : 'tsx'} />
         {propsDoc[fw] && (
           <table>
             <thead><tr><th>Name</th><th>Type</th><th>Required</th><th>Default</th><th>Description</th></tr></thead>
