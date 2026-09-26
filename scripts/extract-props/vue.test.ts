@@ -21,6 +21,36 @@ describe('propsFromScript', () => {
     ]);
   });
 
+  it('reads JSDoc description and an @default tag off an inline defineProps<{...}> object type member (Chart\'s real curve prop has no withDefaults, only an @default tag)', () => {
+    const script = `
+      defineProps<{
+        /**
+         * Line curve style.
+         * @default 'monotone'
+         */
+        curve?: 'linear' | 'monotone' | 'step';
+      }>();
+    `;
+    const { members } = propsFromScript(script);
+    expect(members).toEqual([
+      { name: 'curve', type: "'linear' | 'monotone' | 'step'", required: false, default: "'monotone'", description: 'Line curve style.' },
+    ]);
+  });
+
+  it('surfaces a heritage note from a named-interface defineProps<Interface>() that extends a foreign type, instead of discarding it', () => {
+    const project = new Project({ useInMemoryFileSystem: true });
+    project.createSourceFile('/repo/node_modules/react/index.d.ts', `export interface Foreign { onClick?: () => void; }`);
+    const script = `
+      import type { Foreign } from 'react';
+      interface Props extends Foreign {
+        loading?: boolean;
+      }
+      defineProps<Props>();
+    `;
+    const { note } = propsFromScript(script, project, '/repo/manthan-vue/src/components/__test__');
+    expect(note).toContain('Foreign');
+  });
+
   it('reads defineModel<T>() as modelValue and a named defineModel as its given name', () => {
     const script = `
       const model = defineModel<string>();

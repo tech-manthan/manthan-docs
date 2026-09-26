@@ -15,7 +15,7 @@ export function isInternalDeclaration(filePath: string): boolean {
   return !filePath.includes('node_modules') || /node_modules[\\/]@manthan[\\/]/.test(filePath);
 }
 
-function jsDocOf(node: PropertySignature): { description?: string; default?: string } {
+export function jsDocOf(node: PropertySignature): { description?: string; default?: string } {
   const doc = node.getJsDocs()[0];
   if (!doc) return {};
   const description = doc.getDescription().trim() || undefined;

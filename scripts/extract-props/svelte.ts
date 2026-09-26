@@ -76,8 +76,23 @@ export function propsFromSvelteScript(
     if (note) notes.push(note);
   }
   const bindable = bindableMembers(script, project, virtualPath);
-  const declaredTypes = new Map(own.map((p) => [p.name, p.type]));
-  const merged = bindable.map((b) => (declaredTypes.has(b.name) ? { ...b, type: declaredTypes.get(b.name)! } : b));
+  const declaredOwn = new Map(own.map((p) => [p.name, p]));
+  // A bindable prop's type/required/description come from the *declared*
+  // Props interface member when one exists (the real, author-written
+  // JSDoc and required-ness), not from bindableMembers' own guesses —
+  // bindableMembers only sees the destructuring pattern, which has no way
+  // to carry a JSDoc comment or express "required" (every $bindable() looks
+  // optional there, since Svelte always requires a default expression).
+  const merged = bindable.map((b) => {
+    const declared = declaredOwn.get(b.name);
+    if (!declared) return b;
+    return {
+      ...b,
+      type: declared.type,
+      required: declared.required,
+      ...(declared.description ? { description: `Two-way bindable. ${declared.description}` } : {}),
+    };
+  });
   const bindableNames = new Set(bindable.map((b) => b.name));
   const defaults = declaredDefaults(script, project, virtualPath);
   const ownWithDefaults = own
@@ -95,9 +110,14 @@ export function propsFromSvelteScript(
 // prop. The virtual source file is added at a path inside the real repo
 // root so module resolution behaves as if it were really there, without
 // ever being written to disk.
+// Cached across calls within one orchestrator run — see react.ts's identical
+// comment. Safe to share here too: each call overwrites the same virtual
+// path before reading it back, and calls are sequential, never concurrent.
+let cachedProject: Project | undefined;
+
 export function extractSvelteProps(file: string, propsType: string): { members: PropDoc[]; note?: string } {
   const sfc = readFileSync(file, 'utf-8');
   const repoRoot = `${process.cwd()}/../manthan-svelte`;
-  const project = new Project({ tsConfigFilePath: `${repoRoot}/tsconfig.json` });
-  return propsFromSvelteScript(extractScriptBlock(sfc), propsType, project, `${repoRoot}/src/lib/components/__extracted__`);
+  cachedProject ??= new Project({ tsConfigFilePath: `${repoRoot}/tsconfig.json` });
+  return propsFromSvelteScript(extractScriptBlock(sfc), propsType, cachedProject, `${repoRoot}/src/lib/components/__extracted__`);
 }

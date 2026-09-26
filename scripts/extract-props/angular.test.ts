@@ -26,6 +26,33 @@ describe('propsFromClass', () => {
     ]);
   });
 
+  it('keeps real JSDoc on a bindable model(), instead of always overwriting it with "Two-way bindable."', () => {
+    const project = new Project({ useInMemoryFileSystem: true });
+    const file = project.createSourceFile(
+      'input.ts',
+      `class MnInput {
+        /** The controlled value. */
+        readonly value = model('');
+      }`,
+    );
+    const members = propsFromClass(file.getClassOrThrow('MnInput'));
+    expect(members).toEqual([
+      { name: 'value', type: 'string', required: false, default: "''", description: 'Two-way bindable. The controlled value.' },
+    ]);
+  });
+
+  it('uses the alias option as the documented prop name when present (real binding name differs from the class property, e.g. a cell renderer\'s `key` input aliased to `mnCell`)', () => {
+    const project = new Project({ useInMemoryFileSystem: true });
+    const file = project.createSourceFile(
+      'cell.ts',
+      `class MnCell {
+        readonly key = input.required<string>({ alias: 'mnCell' });
+      }`,
+    );
+    const members = propsFromClass(file.getClassOrThrow('MnCell'));
+    expect(members).toEqual([{ name: 'mnCell', type: 'string', required: true }]);
+  });
+
   it('throws when the named class is missing', () => {
     const project = new Project({ useInMemoryFileSystem: true });
     project.createSourceFile('a.ts', `class Other {}`);

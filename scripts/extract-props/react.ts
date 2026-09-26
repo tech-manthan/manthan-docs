@@ -43,7 +43,14 @@ export function extractReactPropsFromProject(
   return { members, note: notes[0] };
 }
 
+// Cached across calls within one orchestrator run: a tsConfigFilePath-backed
+// Project does a full program load (parses the whole repo + its type graph)
+// — rebuilding one per component (~30 at the eventual full backfill, times
+// 4 frameworks) is needless repeated work when every pilot component lives
+// in the same repo and can share one already-loaded project.
+let cachedProject: Project | undefined;
+
 export function extractReactProps(file: string, typeName: string): { members: PropDoc[]; note?: string } {
-  const project = new Project({ tsConfigFilePath: `${process.cwd()}/../manthan-react/tsconfig.json` });
-  return extractReactPropsFromProject(project, file, typeName);
+  cachedProject ??= new Project({ tsConfigFilePath: `${process.cwd()}/../manthan-react/tsconfig.json` });
+  return extractReactPropsFromProject(cachedProject, file, typeName);
 }

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { Project, Node, SyntaxKind, SourceFile, CallExpression } from 'ts-morph';
-import { resolveHeritage, walkInterfaceMembers } from './shared';
+import { jsDocOf, resolveHeritage, walkInterfaceMembers } from './shared';
 import type { PropDoc } from './types';
 
 export function extractScriptSetup(sfc: string): string {
@@ -25,23 +25,34 @@ function findDefinePropsCall(file: SourceFile): CallExpression {
   return call;
 }
 
-function definePropsMembers(file: SourceFile, call: CallExpression): PropDoc[] {
+function definePropsMembers(file: SourceFile, call: CallExpression): { members: PropDoc[]; note?: string } {
   const [typeArg] = call.getTypeArguments();
   if (Node.isTypeLiteral(typeArg)) {
-    return typeArg.getMembers().map((m) => {
-      if (!Node.isPropertySignature(m)) throw new Error('Vue adapter: unsupported defineProps member shape');
-      return {
-        name: m.getName(),
-        type: (m.getTypeNode() ?? m.getType()).getText(),
-        required: !m.hasQuestionToken(),
-      };
-    });
+    return {
+      members: typeArg.getMembers().map((m) => {
+        if (!Node.isPropertySignature(m)) throw new Error('Vue adapter: unsupported defineProps member shape');
+        const { description, default: def } = jsDocOf(m);
+        return {
+          name: m.getName(),
+          type: (m.getTypeNode() ?? m.getType()).getText(),
+          required: !m.hasQuestionToken(),
+          ...(def ? { default: def } : {}),
+          ...(description ? { description } : {}),
+        };
+      }),
+    };
   }
   if (isTypeReference(typeArg)) {
     const iface = file.getInterfaceOrThrow(typeArg.getTypeName().getText());
     const own = walkInterfaceMembers(iface);
-    const inherited = iface.getExtends().flatMap((h) => resolveHeritage(h).members);
-    return [...inherited, ...own];
+    const notes: string[] = [];
+    const inherited: PropDoc[] = [];
+    for (const heritage of iface.getExtends()) {
+      const { members, note } = resolveHeritage(heritage);
+      inherited.push(...members);
+      if (note) notes.push(note);
+    }
+    return { members: [...inherited, ...own], note: notes[0] };
   }
   throw new Error('Vue adapter: defineProps<...> argument must be an object type or a named interface');
 }
@@ -109,15 +120,22 @@ export function propsFromScript(
   if (script.includes('defineProps')) {
     const file = project.createSourceFile(`${virtualPath}.ts`, script, { overwrite: true });
     const call = findDefinePropsCall(file);
-    members = applyWithDefaults(file, call, definePropsMembers(file, call));
+    const result = definePropsMembers(file, call);
+    members = applyWithDefaults(file, call, result.members);
+    note = result.note;
   }
   members = [...members, ...defineModelMembers(script, project, virtualPath)];
   return { members, note };
 }
 
+// Cached across calls within one orchestrator run — see react.ts's identical
+// comment. Safe to share here too: each call overwrites the same virtual
+// path before reading it back, and calls are sequential, never concurrent.
+let cachedProject: Project | undefined;
+
 export function extractVueProps(file: string): { members: PropDoc[]; note?: string } {
   const sfc = readFileSync(file, 'utf-8');
   const repoRoot = `${process.cwd()}/../manthan-vue`;
-  const project = new Project({ tsConfigFilePath: `${repoRoot}/tsconfig.json` });
-  return propsFromScript(extractScriptSetup(sfc), project, `${repoRoot}/src/components/__extracted__`);
+  cachedProject ??= new Project({ tsConfigFilePath: `${repoRoot}/tsconfig.json` });
+  return propsFromScript(extractScriptSetup(sfc), cachedProject, `${repoRoot}/src/components/__extracted__`);
 }

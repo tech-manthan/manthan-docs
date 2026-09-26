@@ -28,6 +28,20 @@ describe('propsFromSvelteScript', () => {
     expect(note).toContain('Foreign');
   });
 
+  it('keeps a bindable prop\'s declared JSDoc and required flag from the Props interface, instead of always reporting required: false and dropping the description', () => {
+    const script = `
+      interface Props {
+        /** The controlled value. */
+        value?: string;
+      }
+      let { value = $bindable('') }: Props = $props();
+    `;
+    const { members } = propsFromSvelteScript(script, 'Props');
+    expect(members).toEqual([
+      { name: 'value', type: 'string', required: false, default: "''", description: 'Two-way bindable. The controlled value.' },
+    ]);
+  });
+
   it('reads a plain (non-$bindable) destructuring default from the $props() pattern (spec: "default comes from a destructuring default or an @default JSDoc tag")', () => {
     const script = `
       interface Props { closeOnEscape?: boolean; title: string; }
