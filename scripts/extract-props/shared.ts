@@ -109,6 +109,36 @@ export function resolveHeritage(heritage: ExpressionWithTypeArguments): { member
   const symbol = type.getSymbol() ?? type.getAliasSymbol();
   const decl = symbol?.getDeclarations()?.[0];
   if (decl && isInternalDeclaration(decl.getSourceFile().getFilePath())) {
+    // A plain interface recurses through its OWN `extends` clauses (own AST
+    // members via walkInterfaceMembers, plus resolveHeritage again on each
+    // of its own heritage clauses) rather than walking its full resolved
+    // Type — found via real extraction against Checkbox: `CheckboxProps
+    // extends ChoiceProps extends Omit<ComponentProps<'input'>, ...>`.
+    // ChoiceProps is internal (walk it), but ChoiceProps' OWN heritage is
+    // external — walking ChoiceProps' full *apparent* type (via walkType)
+    // flattens in everything ChoiceProps itself inherited, native <input>
+    // attributes included: ChoiceProps being internal doesn't make its own
+    // external heritage internal too. Recursing with the same
+    // internal/external rule at each hop is what the pilot's other
+    // resolution paths (extractReactPropsFromProject, etc.) already do for
+    // the TOP-level interface; this makes resolveHeritage do the same for
+    // every internal interface it walks, not just the outermost one.
+    if (Node.isInterfaceDeclaration(decl)) {
+      const own = walkInterfaceMembers(decl);
+      const inherited: PropDoc[] = [];
+      const notes: string[] = [];
+      for (const h of decl.getExtends()) {
+        const r = resolveHeritage(h);
+        inherited.push(...r.members);
+        if (r.note) notes.push(r.note);
+      }
+      return { members: [...inherited, ...own].filter((p) => !omitted.includes(p.name)), note: notes[0] };
+    }
+    // Not a plain interface (e.g. a type alias like `VariantProps<typeof
+    // button>` or `ToggleGroupBase & (...)`) — TypeScript type aliases can't
+    // have their own `extends` clause, so there's no further internal/
+    // external hop to recurse into here; walking the full resolved Type is
+    // safe and is still the only way to resolve a computed/mapped shape.
     return { members: walkType(type, target).filter((p) => !omitted.includes(p.name)) };
   }
   return { members: [], note: `Also accepts standard ${typeText} attributes.` };

@@ -109,6 +109,25 @@ describe('resolveHeritage', () => {
     expect(byName.get('curve')).toBe('ChartCurve');
   });
 
+  it('does not leak a two-hop-internal heritage target\'s own external inheritance (regression: real CheckboxProps extends ChoiceProps extends Omit<ComponentProps<\'input\'>, ...>)', () => {
+    const repoRoot = `${process.cwd()}/../manthan-react`;
+    const project = new Project({ tsConfigFilePath: `${repoRoot}/tsconfig.json` });
+    const file = project.addSourceFileAtPath(`${repoRoot}/src/components/form.tsx`);
+    const [heritage] = file.getInterfaceOrThrow('CheckboxProps').getExtends();
+    const { members } = resolveHeritage(heritage);
+    const names = members.map((m) => m.name);
+    // ChoiceProps' own declared members (real, internal — must be present):
+    expect(names).toEqual(expect.arrayContaining(['size', 'tone', 'label', 'description']));
+    // ChoiceProps extends Omit<ComponentProps<'input'>, 'size' | 'type'> —
+    // that heritage is external to ChoiceProps itself and must NOT flatten
+    // into CheckboxProps' table just because ChoiceProps (one hop up) is
+    // internal. Before the fix, walkType on ChoiceProps' full apparent type
+    // pulled in every native <input> attribute/event handler.
+    expect(names).not.toContain('onTransitionEnd');
+    expect(names).not.toContain('onBeforeToggle');
+    expect(names.length).toBeLessThan(10);
+  });
+
   it('unwraps Omit<Internal, "k"> and drops the omitted key', () => {
     const p = project();
     p.createSourceFile(
