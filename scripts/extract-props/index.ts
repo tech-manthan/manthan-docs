@@ -21,7 +21,6 @@ export async function runExtraction(
 ): Promise<void> {
   for (const [slug, source] of Object.entries(registry)) {
     const doc: ComponentPropsDoc = { slug };
-    const notes: string[] = [];
     // Each adapter call is caught (and its result checked) individually —
     // the spec requires the slug AND framework in the error message, and
     // requires failing loudly rather than "never silently emit[ting] an
@@ -46,24 +45,23 @@ export async function runExtraction(
     if (source.react) {
       const r = run('react', () => adapters.react(source.react!.file, source.react!.propsType));
       doc.react = r.members as ComponentPropsDoc['react'];
-      if (r.note) notes.push(r.note);
+      if (r.note) doc.reactNote = r.note;
     }
     if (source.vue) {
       const r = run('vue', () => adapters.vue(source.vue!.file, source.vue!.propsType));
       doc.vue = r.members as ComponentPropsDoc['vue'];
-      if (r.note) notes.push(r.note);
+      if (r.note) doc.vueNote = r.note;
     }
     if (source.svelte) {
       const r = run('svelte', () => adapters.svelte(source.svelte!.file, source.svelte!.propsType));
       doc.svelte = r.members as ComponentPropsDoc['svelte'];
-      if (r.note) notes.push(r.note);
+      if (r.note) doc.svelteNote = r.note;
     }
     if (source.angular) {
       const r = run('angular', () => adapters.angular(source.angular!.file, source.angular!.className));
       doc.angular = r.members as ComponentPropsDoc['angular'];
-      if (r.note) notes.push(r.note);
+      if (r.note) doc.angularNote = r.note;
     }
-    if (notes[0]) doc.note = notes[0];
     write(slug, doc);
   }
 }

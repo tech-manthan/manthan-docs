@@ -2,6 +2,7 @@
 import { getCollection } from 'astro:content';
 const entries = await getCollection('components');
 const byCategory = Object.groupBy(entries, (e) => e.data.category);
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 <html lang="en">
   <head><title>Components — Manthan Docs</title></head>
@@ -10,7 +11,7 @@ const byCategory = Object.groupBy(entries, (e) => e.data.category);
     {Object.entries(byCategory).map(([category, items]) => (
       <section>
         <h2>{category}</h2>
-        <ul>{items!.map((e) => <li><a href={`/components/${e.slug}`}>{e.data.title}</a></li>)}</ul>
+        <ul>{items!.map((e) => <li><a href={`${base}/components/${e.slug}`}>{e.data.title}</a></li>)}</ul>
       </section>
     ))}
   </body>
