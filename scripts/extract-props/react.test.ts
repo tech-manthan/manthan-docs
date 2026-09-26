@@ -51,6 +51,37 @@ describe('extractReactPropsFromProject', () => {
     expect(byName.has('onClick')).toBe(false);
   });
 
+  it('CheckboxProps\' own members merge with its inherited (unexported) ChoiceProps members, with no native leak, through the full extractReactPropsFromProject entry point (regression: real Checkbox — see shared.test.ts for the underlying resolveHeritage fix)', () => {
+    const project = new Project({ tsConfigFilePath: `${process.cwd()}/../manthan-react/tsconfig.json` });
+    const result = extractReactPropsFromProject(project, `${process.cwd()}/../manthan-react/src/components/form.tsx`, 'CheckboxProps');
+    const byName = new Map(result.members.map((m) => [m.name, m]));
+    expect(byName.get('indeterminate')).toEqual({ name: 'indeterminate', type: 'boolean', required: false, default: 'false' });
+    expect(byName.get('onCheckedChange')).toEqual({ name: 'onCheckedChange', type: '(checked: boolean) => void', required: false });
+    expect(byName.get('size')).toBeDefined();
+    expect(byName.get('tone')).toBeDefined();
+    expect(byName.get('label')).toBeDefined();
+    expect(byName.get('description')).toBeDefined();
+    expect(result.members.length).toBe(6);
+  });
+
+  it('resolves an extends reference to a sibling component\'s own Props in the same file, with no native leak (regression: real DatePickerProps extends CalendarProps extends Omit<ComponentProps<\'div\'>, ...>)', () => {
+    const project = new Project({ tsConfigFilePath: `${process.cwd()}/../manthan-react/tsconfig.json` });
+    const calendar = extractReactPropsFromProject(project, `${process.cwd()}/../manthan-react/src/components/advanced.tsx`, 'CalendarProps');
+    const datePicker = extractReactPropsFromProject(project, `${process.cwd()}/../manthan-react/src/components/advanced.tsx`, 'DatePickerProps');
+    const calendarNames = new Set(calendar.members.map((m) => m.name));
+    const datePickerNames = new Set(datePicker.members.map((m) => m.name));
+    for (const name of calendarNames) {
+      if (name === 'autoFocus') continue;
+      expect(datePickerNames.has(name)).toBe(true);
+    }
+    expect(datePickerNames.has('autoFocus')).toBe(false);
+    expect(datePickerNames.has('className')).toBe(true);
+    expect(calendarNames.has('onClick')).toBe(false);
+    expect(datePickerNames.has('onClick')).toBe(false);
+    expect(calendar.members.length).toBe(11);
+    expect(datePicker.members.length).toBe(17);
+  });
+
   it('throws when the named interface is missing', () => {
     const project = new Project({ useInMemoryFileSystem: true });
     project.createSourceFile('/repo/a.tsx', `export interface Other {}`);
