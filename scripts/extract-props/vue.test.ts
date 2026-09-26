@@ -44,4 +44,21 @@ describe('propsFromScript', () => {
       { name: 'rows', type: 'T[]', required: true },
     ]);
   });
+
+  it('reads a withDefaults default whose expression itself contains braces, without truncating it (DataTable\'s real getRowId default)', () => {
+    const script = `
+      withDefaults(defineProps<{ getRowId?: (row: unknown, i: number) => string }>(), {
+        getRowId: (row: unknown, i: number) => String((row as { id?: unknown }).id ?? i),
+      });
+    `;
+    const { members } = propsFromScript(script);
+    expect(members).toEqual([
+      {
+        name: 'getRowId',
+        type: '(row: unknown, i: number) => string',
+        required: false,
+        default: '(row: unknown, i: number) => String((row as { id?: unknown }).id ?? i)',
+      },
+    ]);
+  });
 });

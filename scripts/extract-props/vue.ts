@@ -40,14 +40,20 @@ function definePropsMembers(file: SourceFile, call: CallExpression): PropDoc[] {
   throw new Error('Vue adapter: defineProps<...> argument must be an object type or a named interface');
 }
 
-function applyWithDefaults(script: string, members: PropDoc[]): PropDoc[] {
-  const match = script.match(/withDefaults\(\s*defineProps<[\s\S]*?>\(\)\s*,\s*(\{[\s\S]*?\})\s*\)/);
-  if (!match) return members;
-  const project = new Project({ useInMemoryFileSystem: true });
-  const file = project.createSourceFile('defaults.ts', `const d = ${match[1]};`);
-  const obj = file.getFirstDescendantByKindOrThrow(SyntaxKind.ObjectLiteralExpression);
+// Walks the already-parsed AST rather than re-extracting `withDefaults(...)`'s
+// second argument as text via regex — a non-greedy brace-matching regex
+// truncates at the first nested `}` (e.g. a default like
+// `(row) => String((row as { id?: unknown }).id ?? i)`), silently corrupting
+// any default whose expression itself contains an object type or literal.
+function applyWithDefaults(file: SourceFile, definePropsCall: CallExpression, members: PropDoc[]): PropDoc[] {
+  const withDefaultsCall = file
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .find((c) => c.getExpression().getText() === 'withDefaults' && c.getArguments()[0] === definePropsCall);
+  if (!withDefaultsCall) return members;
+  const [, defaultsArg] = withDefaultsCall.getArguments();
+  if (!defaultsArg || !Node.isObjectLiteralExpression(defaultsArg)) return members;
   const defaults = new Map(
-    obj.getProperties().map((p) => {
+    defaultsArg.getProperties().map((p) => {
       if (!Node.isPropertyAssignment(p)) throw new Error('Vue adapter: unsupported withDefaults shape');
       return [p.getName(), p.getInitializer()!.getText()];
     }),
@@ -86,7 +92,7 @@ export function propsFromScript(script: string): { members: PropDoc[]; note?: st
   let note: string | undefined;
   if (script.includes('defineProps')) {
     const { file, call } = findDefinePropsCall(script);
-    members = applyWithDefaults(script, definePropsMembers(file, call));
+    members = applyWithDefaults(file, call, definePropsMembers(file, call));
   }
   members = [...members, ...defineModelMembers(script)];
   return { members, note };
