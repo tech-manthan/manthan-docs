@@ -1,8 +1,25 @@
+export interface ReactEntry {
+  file: string;
+  propsType: string;
+}
+export interface VueEntry {
+  file: string;
+  propsType?: string;
+}
+export interface SvelteEntry {
+  file: string;
+  propsType: string;
+}
+export interface AngularEntry {
+  file: string;
+  className: string;
+}
+
 export interface ComponentSource {
-  react?: { file: string; propsType: string };
-  vue?: { file: string; propsType?: string };
-  svelte?: { file: string; propsType: string };
-  angular?: { file: string; className: string };
+  react?: ReactEntry | ReactEntry[];
+  vue?: VueEntry | VueEntry[];
+  svelte?: SvelteEntry | SvelteEntry[];
+  angular?: AngularEntry | AngularEntry[];
 }
 
 export const componentRegistry: Record<string, ComponentSource> = {
