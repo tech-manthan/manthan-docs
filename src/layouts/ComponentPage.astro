@@ -10,7 +10,15 @@ interface Props {
   demoSourcePaths: Record<Framework, string>;
 }
 const { slug, title, description, demoSourcePaths } = Astro.props;
-const propsDoc = JSON.parse(readFileSync(new URL(`../data/props/${slug}.json`, import.meta.url), 'utf-8'));
+// A plain `readFileSync(new URL(..., import.meta.url))` resolves relative to
+// wherever Astro's build bundles this component's compiled module inside
+// `dist/`, not to its source location — works in `astro dev` (which serves
+// source files directly) but breaks in `astro build` (confirmed: it looked
+// for `dist/pages/data/props/<slug>.json`). `import.meta.glob` is resolved
+// statically by Vite at build time, so the JSON is inlined into the bundle
+// regardless of where the output file ends up.
+const propsModules = import.meta.glob<Record<string, unknown>>('../data/props/*.json', { eager: true, import: 'default' });
+const propsDoc = propsModules[`../data/props/${slug}.json`];
 const frameworks: Framework[] = ['react', 'vue', 'svelte', 'angular'];
 ---
 <html lang="en">

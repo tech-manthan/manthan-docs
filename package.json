@@ -7,10 +7,11 @@
     "dev": "astro dev",
     "build": "astro build",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "astro sync && tsc --noEmit",
     "extract-props": "tsx scripts/extract-props/index.ts"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "@vue/compiler-sfc": "^3.5.0",
     "astro": "^5.0.0",
     "ts-morph": "^24.0.0",

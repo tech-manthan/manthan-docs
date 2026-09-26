@@ -1,4 +1,4 @@
-import { InterfaceDeclaration, Node, PropertySignature, ExpressionWithTypeArguments, Type, TypeFormatFlags } from 'ts-morph';
+import { InterfaceDeclaration, Node, PropertySignature, ExpressionWithTypeArguments, SyntaxKind, Type, TypeFormatFlags } from 'ts-morph';
 import type { PropDoc } from './types';
 
 // "Internal" means resolvable to our own source (any Manthan repo, including a
@@ -31,8 +31,13 @@ export function walkInterfaceMembers(iface: InterfaceDeclaration): PropDoc[] {
   });
 }
 
+// `Node.isTypeReferenceNode` doesn't exist as a generated guard in this
+// ts-morph version (same gap as the Vue adapter's defineProps branch —
+// see vue.ts). `Node.is(SyntaxKind.TypeReference)` is the equivalent guard.
+const isTypeReference = Node.is(SyntaxKind.TypeReference);
+
 function unwrapOmit(node: Node): { target: Node; omitted: string[] } {
-  if (!Node.isExpressionWithTypeArguments(node) && !Node.isTypeReferenceNode(node)) {
+  if (!Node.isExpressionWithTypeArguments(node) && !isTypeReference(node)) {
     return { target: node, omitted: [] };
   }
   const name = Node.isExpressionWithTypeArguments(node) ? node.getExpression().getText() : node.getTypeName().getText();
@@ -41,7 +46,7 @@ function unwrapOmit(node: Node): { target: Node; omitted: string[] } {
   const omitted = keysType
     .getText()
     .split('|')
-    .map((s) => s.trim().replace(/^['"]|['"]$/g, ''));
+    .map((s: string) => s.trim().replace(/^['"]|['"]$/g, ''));
   return { target: innerType, omitted };
 }
 

@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout manthan-icons
+        uses: actions/checkout@v4
+        with: { repository: tech-manthan/manthan-icons, path: manthan-icons }
+      - name: Checkout manthan-base
+        uses: actions/checkout@v4
+        with: { repository: tech-manthan/manthan-base, path: manthan-base }
+      - name: Checkout manthan-react
+        uses: actions/checkout@v4
+        with: { repository: tech-manthan/manthan-react, path: manthan-react }
+      - name: Checkout manthan-vue
+        uses: actions/checkout@v4
+        with: { repository: tech-manthan/manthan-vue, path: manthan-vue }
+      - name: Checkout manthan-svelte
+        uses: actions/checkout@v4
+        with: { repository: tech-manthan/manthan-svelte, path: manthan-svelte }
+      - name: Checkout manthan-angular
+        uses: actions/checkout@v4
+        with: { repository: tech-manthan/manthan-angular, path: manthan-angular }
+      - name: Checkout manthan-docs
+        uses: actions/checkout@v4
+        with: { path: manthan-docs }
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+
+      - name: Build manthan-icons
+        working-directory: manthan-icons
+        run: npm ci && npm run build
+      - name: Build manthan-base
+        working-directory: manthan-base
+        run: npm ci && npm run build
+      - name: Build manthan-react (lib + demos)
+        working-directory: manthan-react
+        run: npm ci && npm run build && npx vite build demos --outDir demos/dist
+      - name: Build manthan-vue (lib + demos)
+        working-directory: manthan-vue
+        run: npm ci && npm run build && npx vite build demos --outDir demos/dist
+      - name: Build manthan-svelte (lib + demos)
+        working-directory: manthan-svelte
+        run: npm ci && npm run build && npx vite build demos --outDir demos/dist
+      - name: Build manthan-angular (lib + playground)
+        working-directory: manthan-angular
+        run: npm ci && npm run build && npm run build:playground
+
+      - name: Copy demo builds into manthan-docs
+        run: |
+          mkdir -p manthan-docs/public/demos/{react,vue,svelte,angular}
+          cp -r manthan-react/demos/dist/. manthan-docs/public/demos/react/
+          cp -r manthan-vue/demos/dist/. manthan-docs/public/demos/vue/
+          cp -r manthan-svelte/demos/dist/. manthan-docs/public/demos/svelte/
+          cp -r manthan-angular/projects/playground/dist/browser/. manthan-docs/public/demos/angular/
+
+      - name: Install manthan-docs
+        working-directory: manthan-docs
+        run: npm ci
+      - name: Check content/registry consistency
+        working-directory: manthan-docs
+        run: npx tsx scripts/check-consistency.ts
+      - name: Extract props
+        working-directory: manthan-docs
+        run: npm run extract-props
+      - name: Test
+        working-directory: manthan-docs
+        run: npm test
+      - name: Typecheck
+        working-directory: manthan-docs
+        run: npm run typecheck
+      - name: Build
+        working-directory: manthan-docs
+        run: npm run build

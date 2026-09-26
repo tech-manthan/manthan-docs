@@ -6,7 +6,8 @@
     "strict": true,
     "skipLibCheck": true,
     "ignoreDeprecations": "6.0",
-    "noEmit": true
+    "noEmit": true,
+    "types": ["node"]
   },
-  "include": ["scripts", "src"]
+  "include": ["scripts", "src", ".astro/types.d.ts"]
 }
