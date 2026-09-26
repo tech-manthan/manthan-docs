@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # This repo's build depends on 5 sibling repos (icons, base, react, vue,
+  # svelte, angular) checked out at THEIR current `main` — a change in any
+  # of them isn't caught until the next push to manthan-docs itself. Firing
+  # a real repository_dispatch from each sibling repo's own CI would need a
+  # cross-repo PAT stored as a secret in all 6 repos; a daily schedule gets
+  # most of the same drift-detection value with zero credentials to manage.
+  schedule:
+    - cron: '17 6 * * *'
 
 jobs:
   build:
