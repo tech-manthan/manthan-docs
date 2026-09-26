@@ -30,4 +30,10 @@ export const componentRegistry: Record<string, ComponentSource> = {
     svelte: { file: '../manthan-svelte/src/lib/components/DataTable.svelte', propsType: 'Props' },
     angular: { file: '../manthan-angular/projects/manthan/src/lib/data-table.ts', className: 'MnDataTable' },
   },
+  chart: {
+    react: { file: '../manthan-react/src/components/chart.tsx', propsType: 'ChartProps' },
+    vue: { file: '../manthan-vue/src/components/Chart.vue' },
+    svelte: { file: '../manthan-svelte/src/lib/components/Chart.svelte', propsType: 'Props' },
+    angular: { file: '../manthan-angular/projects/manthan/src/lib/chart.ts', className: 'MnChart' },
+  },
 };
