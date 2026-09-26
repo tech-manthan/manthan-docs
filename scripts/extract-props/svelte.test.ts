@@ -10,8 +10,12 @@ describe('extractScriptBlock', () => {
 
 describe('propsFromSvelteScript', () => {
   it('extracts a named Props interface, noting a foreign extends and picking up $bindable defaults', () => {
+    // propsFromSvelteScript analyzes the extracted <script> block in its own
+    // isolated in-memory project (just this one file, no real node_modules),
+    // so an import from a real package specifier can never resolve there —
+    // which is exactly the "external, don't enumerate" case for this test.
     const script = `
-      interface Foreign { onClick?: () => void; }
+      import type { Foreign } from 'svelte/elements';
       interface Props extends Foreign {
         /** Shows a spinner. */
         loading?: boolean;

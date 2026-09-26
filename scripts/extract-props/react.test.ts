@@ -5,9 +5,10 @@ import { extractReactPropsFromProject } from './react';
 describe('extractReactPropsFromProject', () => {
   it('extracts own members and notes a foreign extends', () => {
     const project = new Project({ useInMemoryFileSystem: true });
+    project.createSourceFile('/repo/node_modules/react/index.d.ts', `export interface Foreign { onClick?: () => void; }`);
     project.createSourceFile(
       '/repo/manthan-react/src/components/button.tsx',
-      `interface Foreign { onClick?: () => void; }
+      `import type { Foreign } from 'react';
        export interface ButtonProps extends Foreign {
          /** Shows a spinner. */
          loading?: boolean;

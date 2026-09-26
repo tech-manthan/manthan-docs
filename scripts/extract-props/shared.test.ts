@@ -26,8 +26,9 @@ describe('walkInterfaceMembers', () => {
 });
 
 describe('isInternalDeclaration', () => {
-  it('treats manthan-base paths as internal and everything else as external', () => {
+  it('treats any of our own source as internal, and anything under node_modules as external', () => {
     expect(isInternalDeclaration('/repo/manthan-base/src/dom/chart.ts')).toBe(true);
+    expect(isInternalDeclaration('/repo/manthan-react/src/components/button.tsx')).toBe(true);
     expect(isInternalDeclaration('/repo/node_modules/react/index.d.ts')).toBe(false);
   });
 });
@@ -53,19 +54,34 @@ describe('resolveHeritage', () => {
     ]);
   });
 
-  it('notes an extends reference to an external type instead of enumerating it', () => {
+  it('notes an extends reference to an external (node_modules) type instead of enumerating it', () => {
     const p = project();
+    p.createSourceFile('/repo/node_modules/react/index.d.ts', `export interface ComponentProps { onClick?: () => void; }`);
     const file = p.createSourceFile(
       '/repo/manthan-react/src/components/button.tsx',
-      `interface Native { onClick?: () => void; }
-       interface ButtonProps extends Native { loading?: boolean; }`,
+      `import type { ComponentProps } from 'react';
+       interface ButtonProps extends ComponentProps { loading?: boolean; }`,
     );
-    // "Native" here stands in for a type from outside manthan-base (e.g. React's ComponentProps);
-    // resolveHeritage only special-cases the *path*, so any non-manthan-base path proves the branch.
     const [heritage] = file.getInterfaceOrThrow('ButtonProps').getExtends();
     const { members, note } = resolveHeritage(heritage);
     expect(members).toEqual([]);
-    expect(note).toContain('Native');
+    expect(note).toContain('ComponentProps');
+  });
+
+  it('resolves an extends reference to a local type alias, not just a local interface (e.g. `type ButtonVariants = VariantProps<typeof button>`)', () => {
+    const p = project();
+    const file = p.createSourceFile(
+      '/repo/manthan-react/src/components/button.tsx',
+      `type ButtonVariants = { variant?: 'solid' | 'soft'; size?: 'sm' | 'md' };
+       interface ButtonProps extends ButtonVariants { loading?: boolean; }`,
+    );
+    const [heritage] = file.getInterfaceOrThrow('ButtonProps').getExtends();
+    const { members, note } = resolveHeritage(heritage);
+    expect(note).toBeUndefined();
+    expect(members).toEqual([
+      { name: 'variant', type: "'solid' | 'soft'", required: false },
+      { name: 'size', type: "'sm' | 'md'", required: false },
+    ]);
   });
 
   it('unwraps Omit<Internal, "k"> and drops the omitted key', () => {
