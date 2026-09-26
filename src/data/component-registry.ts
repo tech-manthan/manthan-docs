@@ -18,4 +18,10 @@ export const componentRegistry: Record<string, ComponentSource> = {
     svelte: { file: '../manthan-svelte/src/lib/components/Input.svelte', propsType: 'Props' },
     angular: { file: '../manthan-angular/projects/manthan/src/lib/form.ts', className: 'MnInput' },
   },
+  dialog: {
+    react: { file: '../manthan-react/src/components/overlay.tsx', propsType: 'DialogProps' },
+    vue: { file: '../manthan-vue/src/components/Dialog.vue' },
+    svelte: { file: '../manthan-svelte/src/lib/components/Dialog.svelte', propsType: 'Props' },
+    angular: { file: '../manthan-angular/projects/manthan/src/lib/overlay.ts', className: 'MnDialog' },
+  },
 };
