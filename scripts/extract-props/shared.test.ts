@@ -31,6 +31,19 @@ describe('isInternalDeclaration', () => {
     expect(isInternalDeclaration('/repo/manthan-react/src/components/button.tsx')).toBe(true);
     expect(isInternalDeclaration('/repo/node_modules/react/index.d.ts')).toBe(false);
   });
+
+  it('still treats a published @manthan/* package as internal even once it resolves under node_modules (roadmap item 2)', () => {
+    // Today, `file:../manthan-base` devDependencies resolve to a realpath
+    // outside node_modules, so plain `!includes('node_modules')` happens to
+    // work — but once real npm-published @manthan/* versions replace those
+    // links, their declarations resolve to genuine node_modules/@manthan/*
+    // paths, and that same check would silently start treating every
+    // Manthan-authored heritage type as external (a note, not real props) —
+    // exactly Chart's Review Focus risk, just triggered by publishing
+    // instead of a broken import.
+    expect(isInternalDeclaration('/repo/node_modules/@manthan/base/dist/dom/chart.d.ts')).toBe(true);
+    expect(isInternalDeclaration('/repo/node_modules/react/index.d.ts')).toBe(false);
+  });
 });
 
 describe('resolveHeritage', () => {

@@ -19,6 +19,25 @@ describe('extractReactPropsFromProject', () => {
     expect(result.note).toContain('Foreign');
   });
 
+  it('reads a destructuring default from the component function whose parameter is typed with propsType (spec: "default comes from a destructuring default or an @default JSDoc tag")', () => {
+    const project = new Project({ useInMemoryFileSystem: true });
+    project.createSourceFile(
+      '/repo/manthan-react/src/components/dialog.tsx',
+      `export interface DialogProps {
+         closeOnEscape?: boolean;
+         title: string;
+       }
+       export function Dialog({ closeOnEscape = true, title }: DialogProps) {
+         return null;
+       }`,
+    );
+    const result = extractReactPropsFromProject(project, '/repo/manthan-react/src/components/dialog.tsx', 'DialogProps');
+    expect(result.members).toEqual([
+      { name: 'closeOnEscape', type: 'boolean', required: false, default: 'true' },
+      { name: 'title', type: 'string', required: true },
+    ]);
+  });
+
   it('throws when the named interface is missing', () => {
     const project = new Project({ useInMemoryFileSystem: true });
     project.createSourceFile('/repo/a.tsx', `export interface Other {}`);

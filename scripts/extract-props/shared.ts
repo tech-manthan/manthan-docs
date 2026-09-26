@@ -5,9 +5,14 @@ import type { PropDoc } from './types';
 // local type alias like `type ButtonVariants = VariantProps<typeof button>` in
 // manthan-react itself) rather than a third-party package. Anything ts-morph
 // resolves into node_modules — React's ComponentProps, Svelte's
-// HTMLButtonAttributes, etc. — is external.
+// HTMLButtonAttributes, etc. — is external, EXCEPT a published @manthan/*
+// package: today `file:../manthan-base` devDependencies realpath-resolve
+// outside node_modules entirely (which is why the plain node_modules check
+// happens to work), but once npm-published versions replace those links
+// (roadmap item 2), @manthan/*'s declarations resolve to genuine
+// node_modules/@manthan/* paths — still our own source, not a third party.
 export function isInternalDeclaration(filePath: string): boolean {
-  return !filePath.includes('node_modules');
+  return !filePath.includes('node_modules') || /node_modules[\\/]@manthan[\\/]/.test(filePath);
 }
 
 function jsDocOf(node: PropertySignature): { description?: string; default?: string } {

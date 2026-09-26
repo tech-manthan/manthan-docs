@@ -1,6 +1,26 @@
-import { Project } from 'ts-morph';
+import { Node, Project, SourceFile, SyntaxKind } from 'ts-morph';
 import { resolveHeritage, walkInterfaceMembers } from './shared';
 import type { PropDoc } from './types';
+
+// Finds the component function's `{ x = default, ... }: <typeName>` parameter
+// and reads each destructured default — the spec's other source of `default`
+// (alongside `@default` JSDoc), and React's only way to express one (no
+// `withDefaults`-style wrapper, unlike Vue). Matches on the parameter's own
+// type annotation text rather than assuming a single function per file,
+// since a components file (e.g. overlay.tsx) declares several.
+function destructuringDefaults(file: SourceFile, typeName: string): Map<string, string> {
+  const defaults = new Map<string, string>();
+  for (const param of file.getDescendantsOfKind(SyntaxKind.Parameter)) {
+    if (param.getTypeNode()?.getText() !== typeName) continue;
+    const pattern = param.getNameNode();
+    if (!Node.isObjectBindingPattern(pattern)) continue;
+    for (const el of pattern.getElements()) {
+      const initializer = el.getInitializer();
+      if (initializer) defaults.set(el.getName(), initializer.getText());
+    }
+  }
+  return defaults;
+}
 
 export function extractReactPropsFromProject(
   project: Project,
@@ -18,7 +38,9 @@ export function extractReactPropsFromProject(
     inherited.push(...members);
     if (note) notes.push(note);
   }
-  return { members: [...inherited, ...own], note: notes[0] };
+  const defaults = destructuringDefaults(source, typeName);
+  const members = [...inherited, ...own].map((m) => (m.default === undefined && defaults.has(m.name) ? { ...m, default: defaults.get(m.name)! } : m));
+  return { members, note: notes[0] };
 }
 
 export function extractReactProps(file: string, typeName: string): { members: PropDoc[]; note?: string } {

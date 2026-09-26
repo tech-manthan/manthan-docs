@@ -40,6 +40,24 @@ function bindableMembers(script: string, project: Project, virtualPath: string):
   return props;
 }
 
+// Reads a plain (non-`$bindable`) destructuring default off the `$props()`
+// pattern — the spec's other source of `default`, alongside `@default`
+// JSDoc. Shares `bindableMembers`' BindingElement scan but skips any element
+// whose initializer IS a `$bindable(...)` call, since that path already
+// records its own default.
+function declaredDefaults(script: string, project: Project, virtualPath: string): Map<string, string> {
+  const file = project.createSourceFile(`${virtualPath}.defaults.ts`, script, { overwrite: true });
+  const defaults = new Map<string, string>();
+  for (const el of file.getDescendantsOfKind(SyntaxKind.BindingElement)) {
+    const initializer = el.getInitializer();
+    if (!initializer || (Node.isCallExpression(initializer) && initializer.getExpression().getText() === '$bindable')) continue;
+    const nameNode = el.getNameNode();
+    if (!Node.isIdentifier(nameNode)) continue;
+    defaults.set(nameNode.getText(), initializer.getText());
+  }
+  return defaults;
+}
+
 export function propsFromSvelteScript(
   script: string,
   propsType: string,
@@ -61,7 +79,11 @@ export function propsFromSvelteScript(
   const declaredTypes = new Map(own.map((p) => [p.name, p.type]));
   const merged = bindable.map((b) => (declaredTypes.has(b.name) ? { ...b, type: declaredTypes.get(b.name)! } : b));
   const bindableNames = new Set(bindable.map((b) => b.name));
-  return { members: [...inherited, ...own.filter((p) => !bindableNames.has(p.name)), ...merged], note: notes[0] };
+  const defaults = declaredDefaults(script, project, virtualPath);
+  const ownWithDefaults = own
+    .filter((p) => !bindableNames.has(p.name))
+    .map((p) => (p.default === undefined && defaults.has(p.name) ? { ...p, default: defaults.get(p.name)! } : p));
+  return { members: [...inherited.filter((p) => !bindableNames.has(p.name)), ...ownWithDefaults, ...merged], note: notes[0] };
 }
 
 // Real extraction uses a tsConfigFilePath-backed project (not a bare

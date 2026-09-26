@@ -15,7 +15,14 @@ describe('runExtraction', () => {
         } as any,
         () => {},
       ),
-    ).rejects.toThrow(/button.*boom/s);
+    ).rejects.toThrow(/button.*react.*boom/s);
+  });
+
+  it('throws (spec: "never silently emits an empty table") when an adapter resolves but returns zero props — a registry entry pointing at a real file/type with no matching props, not just a missing one', async () => {
+    const registry: Record<string, ComponentSource> = { button: { react: { file: 'a.tsx', propsType: 'ButtonProps' } } };
+    await expect(
+      runExtraction(registry, { react: () => ({ members: [] }) } as any, () => {}),
+    ).rejects.toThrow(/button.*react.*zero props/is);
   });
 
   it('writes one JSON file per slug via the provided writer', async () => {

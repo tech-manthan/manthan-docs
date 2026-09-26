@@ -22,29 +22,46 @@ export async function runExtraction(
   for (const [slug, source] of Object.entries(registry)) {
     const doc: ComponentPropsDoc = { slug };
     const notes: string[] = [];
-    try {
-      if (source.react) {
-        const r = adapters.react(source.react.file, source.react.propsType);
-        doc.react = r.members as ComponentPropsDoc['react'];
-        if (r.note) notes.push(r.note);
+    // Each adapter call is caught (and its result checked) individually —
+    // the spec requires the slug AND framework in the error message, and
+    // requires failing loudly rather than "never silently emit[ting] an
+    // empty table": an adapter that resolves without throwing but finds
+    // zero props (a registry entry pointing at a real file/type that just
+    // has no matching props — e.g. a typo'd propsType that happens to
+    // resolve, or a component whose script has neither defineProps nor
+    // defineModel) is exactly the silent-thin-table failure mode named as
+    // this plan's top risk.
+    const run = (framework: string, fn: () => { members: unknown[]; note?: string }): { members: unknown[]; note?: string } => {
+      let result: { members: unknown[]; note?: string };
+      try {
+        result = fn();
+      } catch (err) {
+        throw new Error(`Extraction failed for "${slug}" (${framework}): ${(err as Error).message}`, { cause: err });
       }
-      if (source.vue) {
-        const r = adapters.vue(source.vue.file, source.vue.propsType);
-        doc.vue = r.members as ComponentPropsDoc['vue'];
-        if (r.note) notes.push(r.note);
+      if (result.members.length === 0) {
+        throw new Error(`Extraction failed for "${slug}" (${framework}): adapter returned zero props — check the registry's file/type name`);
       }
-      if (source.svelte) {
-        const r = adapters.svelte(source.svelte.file, source.svelte.propsType);
-        doc.svelte = r.members as ComponentPropsDoc['svelte'];
-        if (r.note) notes.push(r.note);
-      }
-      if (source.angular) {
-        const r = adapters.angular(source.angular.file, source.angular.className);
-        doc.angular = r.members as ComponentPropsDoc['angular'];
-        if (r.note) notes.push(r.note);
-      }
-    } catch (err) {
-      throw new Error(`Extraction failed for "${slug}": ${(err as Error).message}`, { cause: err });
+      return result;
+    };
+    if (source.react) {
+      const r = run('react', () => adapters.react(source.react!.file, source.react!.propsType));
+      doc.react = r.members as ComponentPropsDoc['react'];
+      if (r.note) notes.push(r.note);
+    }
+    if (source.vue) {
+      const r = run('vue', () => adapters.vue(source.vue!.file, source.vue!.propsType));
+      doc.vue = r.members as ComponentPropsDoc['vue'];
+      if (r.note) notes.push(r.note);
+    }
+    if (source.svelte) {
+      const r = run('svelte', () => adapters.svelte(source.svelte!.file, source.svelte!.propsType));
+      doc.svelte = r.members as ComponentPropsDoc['svelte'];
+      if (r.note) notes.push(r.note);
+    }
+    if (source.angular) {
+      const r = run('angular', () => adapters.angular(source.angular!.file, source.angular!.className));
+      doc.angular = r.members as ComponentPropsDoc['angular'];
+      if (r.note) notes.push(r.note);
     }
     if (notes[0]) doc.note = notes[0];
     write(slug, doc);
