@@ -1,0 +1,21 @@
+---
+import { getCollection } from 'astro:content';
+import ComponentPage from '../../layouts/ComponentPage.astro';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('components');
+  return entries.map((entry) => ({ params: { slug: entry.slug }, props: { entry } }));
+}
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+
+const demoSourcePaths: Record<'react' | 'vue' | 'svelte' | 'angular', string> = {
+  react: new URL('../../../../manthan-react/demos/registry.tsx', import.meta.url).pathname,
+  vue: new URL('../../../../manthan-vue/demos/registry.ts', import.meta.url).pathname,
+  svelte: new URL('../../../../manthan-svelte/demos/registry.ts', import.meta.url).pathname,
+  angular: new URL('../../../../manthan-angular/projects/playground/src/demo.ts', import.meta.url).pathname,
+};
+---
+<ComponentPage slug={entry.slug} title={entry.data.title} description={entry.data.description} demoSourcePaths={demoSourcePaths}>
+  <Content />
+</ComponentPage>

@@ -1,0 +1,17 @@
+---
+import { getCollection } from 'astro:content';
+const entries = await getCollection('components');
+const byCategory = Object.groupBy(entries, (e) => e.data.category);
+---
+<html lang="en">
+  <head><title>Components — Manthan Docs</title></head>
+  <body>
+    <h1>Components</h1>
+    {Object.entries(byCategory).map(([category, items]) => (
+      <section>
+        <h2>{category}</h2>
+        <ul>{items!.map((e) => <li><a href={`/components/${e.slug}`}>{e.data.title}</a></li>)}</ul>
+      </section>
+    ))}
+  </body>
+</html>
