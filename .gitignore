@@ -1,0 +1,7 @@
+node_modules
+dist
+.astro
+src/data/props
+public/demos
+*.log
+.DS_Store
